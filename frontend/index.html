@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Smart Chatbot Demo</title>
+        <style>
+            .chat-containter {
+                max-width: 600px;
+                margin: 0 auto;
+                border: 1px solid #ccc;
+                height: 500px;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .chat-messages {
+                flex: 1;
+                padding: 20px;
+                overflow-y: auto;
+                background: #f9f9f9;
+            }
+
+            .message {
+                margin: 10px 0;
+                padding: 10px;
+                border-radius: 10px;
+                max-width: 80%;
+            }
+
+            .user-message {
+                background: #007bff;
+                color: white;
+                margin-left: auto;
+            }
+
+            .bot-message {
+                background: white;
+                border: 1px solid #ddd;
+            }
+
+            .chat-input {
+                display: flex;
+                padding: 20px;
+                border-top: 1px solid #ccc;
+            }
+
+            .chat-input input {
+                flex: 1;
+                padding: 10px;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+            }
+
+            .chat-input button {
+                padding: 10px 20px;
+                margin-left: 10px;
+                background: #007bff;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+            }
+
+            .debug-info {
+                font-size: 12px;
+                color: #666;
+                margin-top: 5px;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="chat-containter">
+            <div class="chat-messages" id="messages"></div>
+            <div class="chat-input">
+                <input type="text" id="messageInput" placeholder="Type your message...">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+
+        <script>
+            let sessionId = null;
+
+            async function sendMessage() {
+                const input = document.getElementById("messageInput");
+                const message = input.value.trim();
+                if (!message) return;
+
+                // Display user message
+                addMessage(message, 'user');
+                input.value = '';
+
+                try {
+                    const response = await fetch('http://127.0.0.1:8000/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            message: message, sessionId: sessionId
+                        })
+                        
+                    });
+
+                    const data = await response.json();
+                    sessionId = data.sessionId;
+
+                    // Display bot response
+                    addMessage(data.response, 'bot', {
+                        intent: data.intent,
+                        confidence: data.confidence.toFixed(2),
+                        entities: data.entities
+                    });
+                } catch (error) {
+                    console.error('Error:', error);
+                    addMessage('Sorry, I encountered an error. Please try again.', 'bot');
+                }
+            }
+
+            function addMessage(text, sender, debug = null) {
+                const messagesDiv = document.getElementById('messages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${sender}-message`;
+                messageDiv.textContent = text;
+
+                if (debug) {
+                    const debugDiv = document.createElement('div');
+                    debugDiv.className = 'debug-info';
+                    debugDiv.textContent = `Intent: ${debug.intent} (${debug.confidence}) | Entities: ${JSON.stringify(debug.entities)}`;
+                    messageDiv.appendChild(debugDiv);
+                }
+
+                messagesDiv.appendChild(messageDiv);
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+
+            // Enter key to send message
+            document.getElementById('messageInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            })
+
+            // Wait for DOM to be ready before adding initial greeting
+            document.addEventListener('DOMContentLoaded', function(){
+                addMessage('Hello! How can I help you today? 您好！今天我能为您做些什么？', 'bot');
+            })
+        </script>
+    </body>
+</html>
