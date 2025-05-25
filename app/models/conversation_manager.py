@@ -1,12 +1,20 @@
 import json
 from datetime import datetime
 from typing import Dict, List
+from ..config import get_logger
 
 
 class ConversationManager:
-    def __init__(self):
+    def __init__(self, config=None):
+        self.config = config
+        self.logger = get_logger(__name__)
         self.conversations = {}
         self.responses = self.load_responses()
+
+        max_history = config.MAX_CONVERSATION_HISTORY if config else 50
+        self.logger.info(
+            "Conversation Manager initialized with max history: %d", max_history
+        )
 
     def load_responses(self):
         return {
@@ -61,6 +69,7 @@ class ConversationManager:
     ):
         if session_id not in self.conversations:
             self.conversations[session_id] = []
+            self.logger.info("New conversation session created: %s", session_id)
 
         self.conversations[session_id].append(
             {
@@ -70,3 +79,13 @@ class ConversationManager:
                 "intent": intent,
             }
         )
+
+        # Limit conversation history
+        max_history = self.config.MAX_CONVERSATION_HISTORY if self.config else 50
+        if len(self.conversations[session_id]) > max_history:
+            self.conversations[session_id] = self.conversations[session_id][
+                -max_history:
+            ]
+            self.logger.debug("Conversation history trimmed for session %s", session_id)
+
+        self.logger.debug("Conversation saved for session %s", {session_id})

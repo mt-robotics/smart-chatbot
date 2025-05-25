@@ -1,20 +1,31 @@
+import re
+from ..config import get_logger
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
-import re
 
 
 class NLPEngine:
-    def __init__(self):
-        # Use smaller models to reduce size
+    def __init__(self, config=None):
+        self.config = config
+        self.logger = get_logger(__name__)
+
+        self.confidence_threshold = config.CONFIDENCE_THRESHOLD if config else 0.5
+        self.logger.info(
+            "NLP Engine initialized with confidence threshold: %s",
+            self.confidence_threshold,
+        )
+        # initialize NLP models - Use smaller models to reduce size
         try:
             import spacy
 
             self.nlp_en = spacy.load("en_core_web_sm")
             self.nlp_zh = spacy.load("zh_core_web_sm")
+            self.logger.info("SpaCy models loaded successfully")
         except (ImportError, OSError):
             # Fallback if models not available
             self.nlp_en = None
             self.nlp_zh = None
+            self.logger.warning("SpaCy models not available, using fallback methods.")
 
         self.intent_classifier = MultinomialNB()
         self.vectorizer = TfidfVectorizer()
@@ -99,6 +110,7 @@ class NLPEngine:
         return entities
 
     def train_intent_classifier(self, training_data):
+        self.logger.info("Starting intent classifier training...")
         texts = []
         labels = []
 
@@ -111,11 +123,19 @@ class NLPEngine:
         self.intent_classifier.fit(X, labels)
         self.trained = True
 
+        self.logger.info(
+            "Intent classifier trained with %d examples across %d intents",
+            len(texts),
+            len(training_data),
+        )
+
     def classify_intent(self, text):
         if not self.trained:
+            self.logger.error("Intent classifier not trained!")
             return "unknown", 0.0
 
         processed_text = self.preprocess_text(text)
+        self.logger.debug("Classifying intent for: %s", processed_text)
 
         # Add keyword-based rules for better accuracy
         if any(
@@ -126,11 +146,13 @@ class NLPEngine:
                 word in processed_text
                 for word in ["cancel", "stop", "remove", "refund"]
             ):
+                self.logger.debug("Keyword-based classification: product_inquiry")
                 return "product_inquiry", 0.95
 
         if any(
             word in processed_text for word in ["cancel", "stop", "remove", "refund"]
         ):
+            self.logger.debug("Keyword-based classification: cancel_order")
             return "cancel_order", 0.9
 
         # Fall back to ML classification
@@ -138,4 +160,9 @@ class NLPEngine:
         intent = self.intent_classifier.predict(X)[0]
         confidence = max(self.intent_classifier.predict_proba(X)[0])
 
+        self.logger.debug(
+            "ML classification: %s (confidence: %.2f)", intent, confidence
+        )
+
+        # Convert NumPy types to Python Types
         return intent, confidence

@@ -3,6 +3,8 @@
     <head>
         <meta charset="UTF-8">
         <title>Smart Chatbot Demo</title>
+        <!-- Load configuration before any other scripts -->
+         <script src="config.js"></script>
         <style>
             .chat-containter {
                 max-width: 600px;
@@ -66,10 +68,35 @@
                 color: #666;
                 margin-top: 5px;
             }
+
+            .environment-info {
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                background: #f8f9fa;
+                padding: 5px 10px;
+                border-radius: 5px;
+                font-size: 12px;
+                color: #666;
+                border: 1px solid #dee2e6;
+            }
+            .environment-info.development {
+                background: #d4edda;
+                border-color: #c3e6cb;
+                color: #155724;
+            }
+            .environment-info.production {
+                background: #f8d7da;
+                border-color: #f5c6cb;
+                color: #721c24;
+            }
         </style>
     </head>
 
     <body>
+        <!-- Environment indicator (only shows in debug mode) -->
+         <div id="environmentInfo" class="environment-info" style="display: none;"></div>
+
         <div class="chat-containter">
             <div class="chat-messages" id="messages"></div>
             <div class="chat-input">
@@ -79,9 +106,60 @@
         </div>
 
         <script>
+            // Configuration is loaded from config.js
+            let CONFIG = null;
             let sessionId = null;
 
+            // Wait for configuration to be available
+            function waitForConfig() {
+                return new Promise((resolve) => {
+                    const checkConfig = () => {
+                        if (window.ChatbotConfig) {
+                            CONFIG = window.ChatbotConfig;
+                            resolve(CONFIG);
+                        } else {
+                            setTimeout(checkConfig, 50); // Check every 50ms
+                        }
+                    };
+                    checkConfig();
+                });
+            }
+
+            // Initialize the application
+            async function initializeApp() {
+                try {
+                    // Wait for configuration to load
+                    CONFIG = await waitForConfig();
+
+                    console.log('✅ Configuration loaded successfully:', CONFIG);
+
+                    // Show environment info if debug mode is enabled
+                    if (CONFIG.DEBUG) {
+                        const envInfo = document.getElementById('environmentInfo');
+                        envInfo.textContent = `Environment: ${CONFIG.ENVIRONMENT} | API: ${CONFIG.API_URL}`;
+                        envInfo.className = `environment-info ${CONFIG.DETECTED_ENVIRONMENT}`;
+                        envInfo.style.display = 'block';
+                    }
+
+                    // Add initial greeting
+                    addMessage('Hello! How can I help you today? 您好！今天我能为您做些什么？', 'bot');
+
+                    // Log configuration in debug mode
+                    if (CONFIG.DEBUG) {
+                        console.log('🤖 Chatbot initialized with configuration:', CONFIG);
+                    }
+                } catch (error) {
+                    console.error('❌ Failed to initialize chatbot:', error);
+                    addMessage('Configuration error. Please refresh the page.', 'bot');
+                }
+            }
+
             async function sendMessage() {
+                // Ensure config is loaded before sending message
+                if (!CONFIG) {
+                    CONFIG = await waitForConfig();
+                }
+
                 const input = document.getElementById("messageInput");
                 const message = input.value.trim();
                 if (!message) return;
@@ -91,29 +169,51 @@
                 input.value = '';
 
                 try {
-                    const response = await fetch('http://127.0.0.1:8000/chat', {
+                    const response = await fetch(`${CONFIG.API_URL}/chat`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
-                            message: message, sessionId: sessionId
+                            message: message, 
+                            sessionId: sessionId
                         })
-                        
                     });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
 
                     const data = await response.json();
                     sessionId = data.sessionId;
 
+                    // Show debug info based on configuration
+                    let debugInfo = null;
+                    if (CONFIG.SHOW_DEBUG_INFO) {
+                        debugInfo = {
+                            intent: data.intent,
+                            confidence: data.confidence.toFixed(2),
+                            entities: data.entities,
+                        };
+
+                        // Add additional debug info if available
+                        if (data.debug_info) {
+                            debugInfo.language = data.debug_info.language;
+                            debugInfo.environment = data.debug_info.environment;
+                        }
+                    }
                     // Display bot response
-                    addMessage(data.response, 'bot', {
-                        intent: data.intent,
-                        confidence: data.confidence.toFixed(2),
-                        entities: data.entities
-                    });
+                    addMessage(data.response, 'bot', debugInfo);
+
                 } catch (error) {
-                    console.error('Error:', error);
-                    addMessage('Sorry, I encountered an error. Please try again.', 'bot');
+                    // Error handling based on configuration
+                    if (CONFIG.DEBUG) {
+                        console.error('Chat request failed:', error);
+                        addMessage(`Error: ${error.message}`, 'bot');
+                    } else {
+                        addMessage('Sorry, I encountered an error. Please try again.', 'bot');
+                    }
+                                        
                 }
             }
 
@@ -123,10 +223,23 @@
                 messageDiv.className = `message ${sender}-message`;
                 messageDiv.textContent = text;
 
+                // Add debug information if provided
                 if (debug) {
                     const debugDiv = document.createElement('div');
                     debugDiv.className = 'debug-info';
-                    debugDiv.textContent = `Intent: ${debug.intent} (${debug.confidence}) | Entities: ${JSON.stringify(debug.entities)}`;
+
+                    let debugText = `Intent: ${debug.intent} (${debug.confidence})`;
+                    if (Object.keys(debug.entities).length > 0) {
+                        debugText += ` | Entities: ${JSON.stringify(debug.entities)}`;
+                    }
+                    if (debug.language) {
+                        debugText += ` | Language: ${debug.language}`;
+                    }
+                    if (debug.environment) {
+                        debugText += ` | Env: ${debug.environment}`;
+                    }
+
+                    debugDiv.textContent = debugText;
                     messageDiv.appendChild(debugDiv);
                 }
 
@@ -139,12 +252,20 @@
                 if (e.key === 'Enter') {
                     sendMessage();
                 }
-            })
+            });
 
-            // Wait for DOM to be ready before adding initial greeting
+            // Handle configuration loading errors
+            window.addEventListener('error', function(e) {
+                if (e.message.includes('config.js')) {
+                    console.error('Failed to load configuration. Make sure to run: python scripts/build-frontend-config.py');
+                }
+            });
+
+            // Initialize when page loads
             document.addEventListener('DOMContentLoaded', function(){
-                addMessage('Hello! How can I help you today? 您好！今天我能为您做些什么？', 'bot');
-            })
+                // Initialize immediately - waitForConfig handles the timing
+                initializeApp();
+            });
         </script>
     </body>
 </html>
