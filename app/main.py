@@ -11,7 +11,12 @@ app = FastAPI(title="Smart Customer Service Chatbot")
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:5500"],  # Frontend URL
+    allow_origins=[
+        "http://localhost:3000",  # Frontend URL
+        "http://127.0.0.1:5500",  # Frontend URL
+        "https://*.railway.app",  # For Railway.app
+        "*",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
