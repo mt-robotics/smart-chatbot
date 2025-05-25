@@ -4,9 +4,9 @@ A bilingual (English/Chinese) AI-powered customer service chatbot built with Fas
 
 ## 🚀 Live Demo
 
-- **Frontend**: [https://tinyurl.com/monireach-smart-chatbot-demo](https://6832c52d8988c6ef48fc5e3f--beamish-praline-72e7b9.netlify.app/)
+- **Frontend**: [https://regal-custard-47715d.netlify.app](https://regal-custard-47715d.netlify.app)
 - **API Documentation**: [https://smart-chatbot-production.up.railway.app/docs](https://smart-chatbot-production.up.railway.app/docs)
-- **Backend API**: [https://smart-chatbot-production.up.railway.app/](https://smart-chatbot-production.up.railway.app/)
+- **Backend API**: [https://smart-chatbot-production.up.railway.app](https://smart-chatbot-production.up.railway.app)
 
 ## 🎯 Features
 
@@ -77,7 +77,7 @@ Frontend (HTML/JS)     ←→     FastAPI Backend     ←→     NLP Engine
 
 1. **Clone the repository**
    ```bash
-   git clone --single-branch --branch railway-deploy https://github.com/mt-robotics/smart-chatbot.git
+   git clone https://github.com/mt-robotics/smart-chatbot.git
    cd smart-chatbot
    ```
 
@@ -178,10 +178,16 @@ Located in `app/data/training_data.py` - easily expandable for new intents and l
 - **Multi-language**: Support for additional languages
 - **Integration**: CRM and helpdesk system connections
 
+## 📚 Additional Documentation
+
+- [NLP Concepts Guide](docs/NLP_CONCEPTS.md) - Deep dive into TF-IDF and Naive Bayes
+- [Development Workflow](docs/DEVELOPMENT_WORKFLOW.md) - Professional Git and deployment practices
+- [Regular Expressions Guide](docs/REGEX_GUIDE.md) - Comprehensive regex documentation
+
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b railway-deploy`)
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
