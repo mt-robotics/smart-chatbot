@@ -1,4 +1,3 @@
-import spacy
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 import re
@@ -8,9 +7,11 @@ class NLPEngine:
     def __init__(self):
         # Use smaller models to reduce size
         try:
+            import spacy
+
             self.nlp_en = spacy.load("en_core_web_sm")
             self.nlp_zh = spacy.load("zh_core_web_sm")
-        except OSError:
+        except (ImportError, OSError):
             # Fallback if models not available
             self.nlp_en = None
             self.nlp_zh = None
