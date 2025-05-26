@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from typing import Dict, List
-from ..config import get_logger
+from ..utils.config import get_logger
 
 
 class ConversationManager:

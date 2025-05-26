@@ -1,8 +1,9 @@
+# app/main.py
 import uuid
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from .config import get_config, get_logger
+from .utils.config import get_config, get_logger
 from .models.nlp_engine import NLPEngine
 from .models.conversation_manager import ConversationManager
 from .data.training_data import TRAINING_DATA

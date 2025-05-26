@@ -1,5 +1,5 @@
 import re
-from ..config import get_logger
+from ..utils.config import get_logger
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 
