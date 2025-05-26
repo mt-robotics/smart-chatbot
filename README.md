@@ -93,12 +93,32 @@ Frontend (HTML/JS)     ←→     FastAPI Backend     ←→     NLP Engine
    pip install -r requirements.txt
    ```
 
-4. **Run the backend**
+4. **Set up environment configuration**
+   ```bash
+   # Copy the example environment file for your development environment
+   cp .env.example .env              # For local development
+
+   # For deploying to production/staging (optional)
+   cp .env.example .env.production   # For production setup
+   cp .env.example .env.staging      # For staging setup
+   ```
+   Edit the copied files to add your specific configurations:
+   - For local development, you can use the defaults in `.env`
+   - For production, update `CORS_ORIGINS` to your frontend domain
+   - For production, update `BACKEND_API_URL` to your hosted API URL
+   - Set `API_DEBUG` and `ENABLE_DEBUG_INFO` to false in production
+
+5. **Generate frontend configuration**
+   ```bash
+   python scripts/build-frontend-config.py
+   ```
+
+6. **Run the backend**
    ```bash
    python main.py
    ```
 
-5. **Open frontend**
+7. **Open frontend**
    ```bash
    cd frontend
    python -m http.server 3000
@@ -160,11 +180,31 @@ curl -X POST "https://smart-chatbot-production.up.railway.app/chat" \
 
 ## 🔧 Configuration
 
+### Environment Setup
+This project uses environment-specific configuration files:
+- `.env.example` - Template with documentation (committed to git)
+- `.env` - Local development settings (not committed)
+- `.env.production` - Production settings (not committed)
+- `.env.staging` - Staging settings (not committed)
+
+The `.env.example` file serves as a template and documentation for all available configuration options. When setting up the project:
+1. Copy `.env.example` to create your environment-specific files
+2. Update the values in each file according to your needs
+3. Never commit actual `.env` files to version control
+
 ### Environment Variables
 ```bash
-# Optional - defaults work for development
-CORS_ORIGINS=https://your-frontend-domain.com
-LOG_LEVEL=INFO
+# API Configuration
+API_HOST=127.0.0.1            # Use 0.0.0.0 for production
+API_PORT=8000                 # Or $PORT for cloud hosting
+API_DEBUG=true               # Set to false in production
+
+# CORS Settings (Critical for security)
+CORS_ORIGINS=http://localhost:3000  # Comma-separated list of allowed domains
+
+# Logging (Adjust per environment)
+LOG_LEVEL=DEBUG              # Use INFO or WARNING in production
+ENABLE_REQUEST_LOGGING=true  # Optional for development debugging
 ```
 
 ### Training Data
