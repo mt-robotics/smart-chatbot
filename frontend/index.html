@@ -470,15 +470,18 @@
                 showTypingIndicator();
 
                 try {
+                    // Build request body - only include session_id if it exists
+                    const requestBody = {message: message};
+                    if (sessionId) {
+                        requestBody.session_id = sessionId;
+                    }
+
                     const response = await fetch(`${CONFIG.API_URL}/chat`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({
-                            message: message, 
-                            session_id: sessionId
-                        })
+                        body: JSON.stringify(requestBody),
                     });
 
                     if (!response.ok) {
