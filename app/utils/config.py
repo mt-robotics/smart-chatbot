@@ -3,6 +3,27 @@ import logging
 from dotenv import load_dotenv
 
 
+class ColoredFormatter(logging.Formatter):
+    """Custom formatter with colored log levels"""
+
+    # ANSI color codes
+    COLORS = {
+        "DEBUG": "\033[36m",  # Cyan
+        "INFO": "\033[32m",  # Green
+        "WARNING": "\033[33m",  # Yellow
+        "ERROR": "\033[31m",  # Red
+        "CRITICAL": "\033[35m",  # Magenta
+        "RESET": "\033[0m",  # Reset
+    }
+
+    def format(self, record):
+        # Add color to levelname
+        if record.levelname in self.COLORS:
+            record.levelname = f"{self.COLORS[record.levelname]}{record.levelname}{self.COLORS['RESET']}"
+
+        return super().format(record)
+
+
 class Config:
     def __init__(self, environment: str = None):
         # Determine environment
@@ -93,7 +114,7 @@ class Config:
         # Create formatter
         if self.environment == "development":
             # Detailed format for development
-            formatter = logging.Formatter(
+            formatter = ColoredFormatter(
                 "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
             )
         else:
