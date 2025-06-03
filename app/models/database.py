@@ -132,7 +132,9 @@ class Database:
         """Check if database connection is working"""
         try:
             with self.get_session() as session:
-                session.execute("SELECT 1")
+                from sqlalchemy import text
+
+                session.execute(text("SELECT 1"))
             logger.info("Database health check passed")
             return True
         except Exception as e:

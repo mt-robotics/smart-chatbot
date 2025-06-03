@@ -84,7 +84,15 @@ class ConversationManager:
 
             # If conversation is older than 30 minutes, consider it inactive
             if conversation and conversation.last_message_at:
-                time_diff = datetime.now(timezone.utc) - conversation.last_message_at
+                if conversation.last_message_at.tzinfo is None:
+                    # Database stored naive datetime, make it UTC-aware
+                    last_message_utc = conversation.last_message_at.replace(
+                        tzinfo=timezone.utc
+                    )
+                else:
+                    last_message_utc = conversation.last_message_at
+                time_diff = datetime.now(timezone.utc) - last_message_utc
+
                 if time_diff > timedelta(minutes=30):
                     conversation.is_active = False
                     db_session.commit()
@@ -220,7 +228,7 @@ class ConversationManager:
                     conversation_id=conversation.id,
                     user_input=user_input,
                     bot_response=bot_response,
-                    detected_langauge=language,
+                    detected_language=language,
                     intent=intent,
                     confidence=confidence,
                     entities=json.dumps(entities) if entities else None,
