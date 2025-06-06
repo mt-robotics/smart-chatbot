@@ -1,6 +1,7 @@
 # app/models/database.py
 import os
 from datetime import datetime, timezone
+import uuid
 from sqlalchemy import (
     create_engine,
     Column,
@@ -15,7 +16,6 @@ from sqlalchemy import (
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.postgresql import UUID
-import uuid
 
 from ..utils.config import get_logger
 
@@ -37,6 +37,12 @@ class User(Base):
     # Relationships
     conversations = relationship(
         "Conversation", back_populates="user", cascade="all, delete-orphan"
+    )
+    preferences = relationship(
+        "UserPreference", back_populates="user", cascade="all, delete-orphan"
+    )
+    insights = relationship(
+        "UserInsight", back_populates="user", cascade="all, delete-orphan"
     )
 
     def __repr__(self):
@@ -60,9 +66,12 @@ class Conversation(Base):
     messages = relationship(
         "Message", back_populates="conversation", cascade="all, delete-orphan"
     )
+    topics = relationship(
+        "ConversationTopic", back_populates="conversation", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
-        return f"<Conversation(id={self.id}, user={self.user.session_id}, messages={self.message_count})>"
+        return f"<Conversation(id={self.id}, user_id={self.user_id}, messages={self.message_count})>"
 
 
 class Message(Base):

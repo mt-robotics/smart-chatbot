@@ -1,11 +1,11 @@
 import json
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
 
 from ..utils.config import get_logger
 from .database import get_database, User, Conversation, Message
+from .information_extractor import InformationExtractor
 
 
 class ConversationManager:
@@ -15,6 +15,8 @@ class ConversationManager:
         # self.conversations = {}
         self.db = get_database()
         self.responses = self.load_responses()
+
+        self.info_extractor = InformationExtractor()
 
         max_history = config.MAX_CONVERSATION_HISTORY if config else 50
         self.logger.info(
@@ -248,6 +250,12 @@ class ConversationManager:
                 db_session.commit()
 
             self.logger.debug("Conversation saved for session %s", session_id)
+
+            # Test the extracted info (temp)
+            extracted_info = self.info_extractor.extract_user_information(
+                user_input, language
+            )
+            self.logger.info("Extracted info: %s", extracted_info)
 
         except Exception as e:
             self.logger.error("Failed to save conversation: %s", str(e), exc_info=True)

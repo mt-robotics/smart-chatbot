@@ -1,7 +1,8 @@
 import re
-from ..utils.config import get_logger
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
+
+from ..utils.config import get_logger
 
 
 class NLPEngine:
@@ -14,18 +15,37 @@ class NLPEngine:
             "NLP Engine initialized with confidence threshold: %s",
             self.confidence_threshold,
         )
-        # initialize NLP models - Use smaller models to reduce size
+
+        self.nlp_en = None
+        self.nlp_zh = None
+
         try:
             import spacy
 
-            self.nlp_en = spacy.load("en_core_web_sm")
-            self.nlp_zh = spacy.load("zh_core_web_sm")
-            self.logger.info("SpaCy models loaded successfully")
+            # Load English model
+            try:
+                self.nlp_en = spacy.load("en_core_web_sm")
+                self.logger.info("English spaCy models loaded successfully")
+            except OSError:
+                self.logger.warning("English spaCy model not available")
+
+            # Load Chinese model (optional)
+            try:
+                self.nlp_zh = spacy.load("zh_core_web_sm")
+                self.logger.info("Chinese spaCy models loaded successfully")
+            except OSError:
+                self.logger.info("Chinese spaCy model not available")
+
+            if not self.nlp_en and not self.nlp_zh:
+                self.logger.warning(
+                    "No spaCy models available, using fallback methods."
+                )
+
         except (ImportError, OSError):
             # Fallback if models not available
             self.nlp_en = None
             self.nlp_zh = None
-            self.logger.warning("SpaCy models not available, using fallback methods.")
+            self.logger.warning("spaCy models not available, using fallback methods.")
 
         self.intent_classifier = MultinomialNB()
         self.vectorizer = TfidfVectorizer()

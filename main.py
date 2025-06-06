@@ -1,5 +1,5 @@
 import uvicorn
-from app.main import app
+from app.main import app  # pylint: disable=unused-import
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

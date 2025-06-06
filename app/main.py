@@ -1,4 +1,5 @@
 # app/main.py
+# pylint: disable=unused-import
 import uuid
 import time
 from contextlib import asynccontextmanager
@@ -8,7 +9,8 @@ from pydantic import BaseModel
 from .utils.config import get_config, get_logger
 from .models.nlp_engine import NLPEngine
 from .models.conversation_manager import ConversationManager
-from .models.database import init_database, get_database
+from .models.database import init_database, get_database, User, Conversation, Message
+from .models.smart_models import UserPreference, UserInsight, ConversationTopic
 from .data.training_data import TRAINING_DATA
 
 # Load configuration (this sets up logging automatically)
