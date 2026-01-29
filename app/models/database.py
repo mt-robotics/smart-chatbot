@@ -17,7 +17,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.dialects.postgresql import UUID
 
-from ..utils.config import get_logger
+# Absolute import from project root
+from app.utils.config import get_logger
 
 logger = get_logger(__name__)
 

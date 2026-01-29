@@ -3,9 +3,10 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
 from sqlalchemy import func
 
-from ..utils.config import get_logger
-from .database import get_database, User, Conversation, Message
-from .information_extractor import InformationExtractor
+# Absolute imports from project root
+from app.utils.config import get_logger
+from app.models.database import get_database, User, Conversation, Message
+from app.models.information_extractor import InformationExtractor
 
 
 class ConversationManager:
@@ -18,7 +19,7 @@ class ConversationManager:
 
         self.info_extractor = InformationExtractor()
 
-        max_history = config.MAX_CONVERSATION_HISTORY if config else 50
+        max_history = config.nlp["max_history"] if config else 50
         self.logger.info(
             # "Conversation Manager initialized with max history: %d",
             "Database-powered Conversation Manager initialized with max history: %d",
@@ -46,6 +47,10 @@ class ConversationManager:
             "goodbye": {
                 "en": "Thank you for contacting us. Have a great day!",
                 "zh": "感谢您联系我们，祝您愉快！",
+            },
+            "low_confidence": {
+                "en": "I'm not quite sure what you're asking. Could you rephrase that?",
+                "zh": "我不太确定您的意思，能否换个说法？",
             },
             "fallback": {
                 "en": "I'm not sure I understand. Could you please rephrase your question?",
@@ -275,7 +280,7 @@ class ConversationManager:
                 .join(Conversation)
                 .filter(Conversation.user_id == user.id)
                 .order_by(Message.timestamp.desc())
-                .limit(self.config.MAX_CONVERSATION_HISTORY if self.config else 50)
+                .limit(self.config.nlp["max_history"] if self.config else 50)
                 .all()
             )
 

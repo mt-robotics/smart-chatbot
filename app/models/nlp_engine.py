@@ -2,7 +2,8 @@ import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 
-from ..utils.config import get_logger
+# Absolute import from project root
+from app.utils.config import get_logger
 
 
 class NLPEngine:
@@ -10,7 +11,9 @@ class NLPEngine:
         self.config = config
         self.logger = get_logger(__name__)
 
-        self.confidence_threshold = config.CONFIDENCE_THRESHOLD if config else 0.5
+        self.confidence_threshold = (
+            config.nlp["confidence_threshold"] if config else 0.5
+        )
         self.logger.info(
             "NLP Engine initialized with confidence threshold: %s",
             self.confidence_threshold,

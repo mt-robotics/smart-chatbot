@@ -1,7 +1,8 @@
 import re
 from typing import Dict, List, Any
 
-from ..utils.config import get_logger
+# Absolute import from project root
+from app.utils.config import get_logger
 
 logger = get_logger(__name__)
 

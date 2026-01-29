@@ -13,7 +13,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 
-from .database import Base
+# Absolute import from project root
+from app.models.database import Base
 
 
 class UserPreference(Base):
