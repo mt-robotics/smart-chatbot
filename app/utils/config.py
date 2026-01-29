@@ -1,13 +1,21 @@
+"""Configuration management for the project.
+
+Loads settings from environment variables and .env files, with support for
+different environments (dev/prod). See README.md for configuration options.
+"""
+
 import os
 import logging
+from dataclasses import dataclass
 from dotenv import load_dotenv
 
 
 class ColoredFormatter(logging.Formatter):
     """Custom formatter with colored log levels"""
 
-    # ANSI color codes
-    COLORS = {
+    # ANSI color codes as class-level constants
+    # ALL_CAPS naming convention indicates these are constants
+    ANSI_COLORS = {
         "DEBUG": "\033[36m",  # Cyan
         "INFO": "\033[32m",  # Green
         "WARNING": "\033[33m",  # Yellow
@@ -16,82 +24,147 @@ class ColoredFormatter(logging.Formatter):
         "RESET": "\033[0m",  # Reset
     }
 
+    def __init__(self, fmt=None, datefmt=None):
+        super().__init__(fmt, datefmt)
+
     def format(self, record):
         # Add color to levelname
-        if record.levelname in self.COLORS:
-            record.levelname = f"{self.COLORS[record.levelname]}{record.levelname}{self.COLORS['RESET']}"
+
+        if record.levelname in self.ANSI_COLORS:
+            record.levelname = f"{self.ANSI_COLORS[record.levelname]}{record.levelname}{self.ANSI_COLORS['RESET']}"
 
         return super().format(record)
 
 
+@dataclass
+class EnvironmentConfig:
+    """Configuration for environment settings."""
+
+    name: str
+    file: str
+
+
+@dataclass
+class LoggingConfig:
+    """Configuration for logging settings."""
+
+    level: str
+    format: str
+
+
+@dataclass
+class APIConfig:
+    """Configuration for API settings."""
+
+    title: str
+    host: str
+    port: int
+    debug: bool
+
+
 class Config:
+    """Manages application configuration and logging setup.
+
+    Provides typed access to configuration through dataclasses and
+    automatically sets up logging based on the environment.
+    """
+
     def __init__(self, environment: str = None):
-        # Determine environment
-        self.environment = (
-            environment
-            or os.getenv("APP_ENV")
-            or os.getenv("ENVIRONMENT", "development")
-        )
+        # Initialize environment config first
+        self._init_environment(environment)
 
-        # Load environment-specific file first
-        env_file = f".env.{self.environment}"
+        # Load environment variables
+        self._load_env_file()
 
-        if os.path.exists(env_file):
-            load_dotenv(env_file, override=True)
-        else:
-            # Fall back to default .env
-            load_dotenv(".env")
-
-        # Load configuration values
+        # Load all other configs
         self._load_config()
 
         # Set up logging AFTER loading config
         self._setup_logging()
 
         # Now we can log safely
-        self.logger.info("Configuration loaded for environment: %s", self.environment)
-        if os.path.exists(env_file):
-            self.logger.info("Using environment file: %s", env_file)
+        self.logger.info("Configuration loaded for environment: %s", self.env.name)
+        if os.path.exists(self.env.file):
+            self.logger.info("Using environment file: %s", self.env.file)
         else:
             self.logger.warning(
-                "Environment file %s not found, using default .env", {env_file}
+                "Environment file %s not found, using default .env", self.env.file
             )
+
+    def _init_environment(self, environment: str = None):
+        """Initialize environment configuration"""
+        env_name = (
+            environment
+            or os.getenv("APP_ENV")
+            or os.getenv("ENVIRONMENT", "development")
+        )
+        self.env = EnvironmentConfig(name=env_name, file=f".env.{env_name}")
+
+    def _load_env_file(self):
+        """Load environment variables from the appropriate file
+
+        NOTE: override=False means Docker/system environment variables take precedence
+        This is critical for containerized deployments where docker-compose sets DATABASE_URL, etc.
+        Order of precedence (highest to lowest):
+        1. System/Docker environment variables (e.g., from docker-compose)
+        2. .env files (loaded here as defaults only)
+        """
+        if os.path.exists(self.env.file):
+            load_dotenv(self.env.file, override=False)
+        else:
+            # Fall back to default .env
+            load_dotenv(".env", override=False)
 
     def _load_config(self):
         """Load all configuration values from environment variables"""
-
-        # API Configurations
-        self.ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-        self.API_HOST = os.getenv("API_HOST", "127.0.0.1")
-        self.API_PORT = int(os.getenv("API_PORT", "8000"))
-        self.API_TITLE = os.getenv("API_TITLE", "Smart Customer Service Chatbot")
-        self.API_DEBUG = os.getenv("API_DEBUG", "false").lower() == "true"
+        # API Configuration
+        self.api = APIConfig(
+            title=os.getenv("API_TITLE", "Smart Chatbot API"),
+            host=os.getenv("API_HOST", "127.0.0.1"),
+            port=int(os.getenv("API_PORT", "8000")),
+            debug=os.getenv("API_DEBUG", "false").lower() == "true",
+        )
 
         # CORS Configuration
         cors_origins = os.getenv("CORS_ORIGINS", "*")
-        self.CORS_ORIGINS = [origin.strip() for origin in cors_origins.split(",")]
+
+        # Middleware Configuration
+        self.middleware = {
+            "enable_request_logging": os.getenv(
+                "ENABLE_REQUEST_LOGGING", "false"
+            ).lower()
+            == "true",  # Request Logging Configuration
+            "cors_origins": [origin.strip() for origin in cors_origins.split(",")],
+        }
 
         # Frontend Configuration
-        self.BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://127.0.0.1:8000")
+        self.frontend = {
+            "backend_url": os.getenv("BACKEND_API_URL", "http://127.0.0.1:8000")
+        }
 
         # NLP Configuration
-        self.CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
-        self.MAX_CONVERSATION_HISTORY = int(os.getenv("MAX_CONVERSATION_HISTORY", "50"))
-        self.ENABLE_DEBUG_INFO = (
-            os.getenv("ENABLE_DEBUG_INFO", "false").lower() == "true"
-        )
+        self.nlp = {
+            "confidence_threshold": float(os.getenv("CONFIDENCE_THRESHOLD", "0.5")),
+            "max_history": int(os.getenv("MAX_CONVERSATION_HISTORY", "50")),
+            "enable_debug": os.getenv("ENABLE_DEBUG_INFO", "false").lower() == "true",
+        }
 
         # Response Configuration
-        self.DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "en")
-        self.ENABLE_FALLBACK_RESPONSES = (
-            os.getenv("ENABLE_FALLBACK_RESPONSES", "true").lower() == "true"
-        )
-        self.RESPONSE_DELAY = float(os.getenv("RESPONSE_DELAY", "0"))
+        self.response = {
+            "default_language": os.getenv("DEFAULT_LANGUAGE", "en"),
+            "enable_fallback": os.getenv("ENABLE_FALLBACK_RESPONSES", "true").lower()
+            == "true",
+            "delay": float(os.getenv("RESPONSE_DELAY", "0")),
+        }
 
         # Logging Configuration
-        self.LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-        self.ENABLE_REQUEST_LOGGING = (
-            os.getenv("ENABLE_REQUEST_LOGGING", "false").lower() == "true"
+        self.logging = LoggingConfig(
+            level=os.getenv("LOG_LEVEL", "INFO").upper(),
+            format=(
+                "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
+                if self.env.name == "development"
+                else "%(asctime)s - %(levelname)s - %(message)s"
+            ),
         )
 
     def _setup_logging(self):
@@ -104,7 +177,7 @@ class Config:
             self.logger.handlers.clear()
 
         # Set log level
-        log_level = getattr(logging, self.LOG_LEVEL, logging.INFO)
+        log_level = getattr(logging, self.logging.level, logging.INFO)
         self.logger.setLevel(log_level)
 
         # Create console handler
@@ -112,14 +185,11 @@ class Config:
         console_handler.setLevel(log_level)
 
         # Create formatter
-        if self.environment == "development":
-            # Detailed format for development
-            formatter = ColoredFormatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
-            )
-        else:
-            # Cleaner format for production
-            formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        formatter = (
+            ColoredFormatter(self.logging.format)
+            if self.env.name == "development"
+            else logging.Formatter(self.logging.format)
+        )
 
         console_handler.setFormatter(formatter)
         self.logger.addHandler(console_handler)

@@ -1,15 +1,20 @@
 # app/main.py
+# pylint: disable=unused-import
 import uuid
 import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from .utils.config import get_config, get_logger
-from .models.nlp_engine import NLPEngine
-from .models.conversation_manager import ConversationManager
-from .models.database import init_database, get_database
-from .data.training_data import TRAINING_DATA
+
+# NOTE: Using absolute imports from project root (app.*) instead of relative imports
+# This ensures imports work consistently in both IDE and Docker environments
+from app.utils.config import get_config, get_logger
+from app.models.nlp_engine import NLPEngine
+from app.models.conversation_manager import ConversationManager
+from app.models.database import init_database, get_database, User, Conversation, Message
+from app.models.smart_models import UserPreference, UserInsight, ConversationTopic
+from app.data.training_data import TRAINING_DATA
 
 # Load configuration (this sets up logging automatically)
 config = get_config()
@@ -22,7 +27,7 @@ async def lifespan(fastapi_app: FastAPI):  # pylint: disable=unused-argument
     """Application lifespan manager for startup and shutdown events"""
     # Startup
     logger.info("Starting application..")
-    logger.info("CORS origins configured: %s", config.CORS_ORIGINS)
+    logger.info("CORS origins configured: %s", config.middleware["cors_origins"])
 
     # Initialize database
     try:
@@ -38,7 +43,7 @@ async def lifespan(fastapi_app: FastAPI):  # pylint: disable=unused-argument
     # Train NLP model
     nlp_engine.train_intent_classifier(TRAINING_DATA)
     logger.info("NLP model training completed")
-    logger.info("Application started successfully in %s mode", config.ENVIRONMENT)
+    logger.info("Application started successfully in %s mode", config.env.name)
 
     yield  # App runs here
 
@@ -46,12 +51,12 @@ async def lifespan(fastapi_app: FastAPI):  # pylint: disable=unused-argument
     logger.info("Application shutting down...")
 
 
-app = FastAPI(title=config.API_TITLE, debug=config.API_DEBUG, lifespan=lifespan)
+app = FastAPI(title=config.api.title, debug=config.api.debug, lifespan=lifespan)
 
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=config.CORS_ORIGINS,
+    allow_origins=config.middleware["cors_origins"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -62,7 +67,7 @@ nlp_engine = NLPEngine(config)
 conversation_manager = ConversationManager(config)
 
 # Request logging middleware
-if config.ENABLE_REQUEST_LOGGING:
+if config.middleware["enable_request_logging"]:
 
     @app.middleware("http")
     async def log_requests(request, call_next):
@@ -90,8 +95,8 @@ class ChatResponse(BaseModel):
 async def root():
     logger.debug("Root endpoint accessed")
     return {
-        "message": config.API_TITLE,
-        "environment": config.ENVIRONMENT,
+        "message": config.api.title,
+        "environment": config.env.name,
         "docs": "/docs",
         "database": "connected" if get_database().health_check() else "disconnected",
     }
@@ -106,7 +111,7 @@ async def health_check():
 
     return {
         "status": "healthy",
-        "environment": config.ENVIRONMENT,
+        "environment": config.env.name,
         "version": "2.0.0",  # Updated version with database
         "database": db_status,
         "components": {
@@ -145,7 +150,7 @@ async def chat(request: ChatRequest):
         )
 
         # Apply confidence threshold
-        if confidence < config.CONFIDENCE_THRESHOLD:
+        if confidence < config.nlp["confidence_threshold"]:
             logger.info(
                 "Low confidence (%.2f}) for intent %s, using fallback",
                 confidence,
@@ -183,12 +188,12 @@ async def chat(request: ChatRequest):
         )
 
         # Add debug info if enabled
-        if config.ENABLE_DEBUG_INFO:
+        if config.nlp["enable_debug"]:
             chat_response.debug_info = {
                 "language": language,
                 "original_confidence": confidence,
-                "threshold_applied": confidence < config.CONFIDENCE_THRESHOLD,
-                "environment": config.ENVIRONMENT,
+                "threshold_applied": confidence < config.nlp["confidence_threshold"],
+                "environment": config.env.name,
                 "response_time_ms": response_time_ms,
                 "database_enabled": get_database().health_check(),
             }

@@ -1,11 +1,12 @@
 import json
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy import func
 
-from ..utils.config import get_logger
-from .database import get_database, User, Conversation, Message
+# Absolute imports from project root
+from app.utils.config import get_logger
+from app.models.database import get_database, User, Conversation, Message
+from app.models.information_extractor import InformationExtractor
 
 
 class ConversationManager:
@@ -16,7 +17,9 @@ class ConversationManager:
         self.db = get_database()
         self.responses = self.load_responses()
 
-        max_history = config.MAX_CONVERSATION_HISTORY if config else 50
+        self.info_extractor = InformationExtractor()
+
+        max_history = config.nlp["max_history"] if config else 50
         self.logger.info(
             # "Conversation Manager initialized with max history: %d",
             "Database-powered Conversation Manager initialized with max history: %d",
@@ -44,6 +47,10 @@ class ConversationManager:
             "goodbye": {
                 "en": "Thank you for contacting us. Have a great day!",
                 "zh": "感谢您联系我们，祝您愉快！",
+            },
+            "low_confidence": {
+                "en": "I'm not quite sure what you're asking. Could you rephrase that?",
+                "zh": "我不太确定您的意思，能否换个说法？",
             },
             "fallback": {
                 "en": "I'm not sure I understand. Could you please rephrase your question?",
@@ -249,6 +256,12 @@ class ConversationManager:
 
             self.logger.debug("Conversation saved for session %s", session_id)
 
+            # Test the extracted info (temp)
+            extracted_info = self.info_extractor.extract_user_information(
+                user_input, language
+            )
+            self.logger.info("Extracted info: %s", extracted_info)
+
         except Exception as e:
             self.logger.error("Failed to save conversation: %s", str(e), exc_info=True)
 
@@ -267,7 +280,7 @@ class ConversationManager:
                 .join(Conversation)
                 .filter(Conversation.user_id == user.id)
                 .order_by(Message.timestamp.desc())
-                .limit(self.config.MAX_CONVERSATION_HISTORY if self.config else 50)
+                .limit(self.config.nlp["max_history"] if self.config else 50)
                 .all()
             )
 
