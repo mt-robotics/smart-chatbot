@@ -1,0 +1,249 @@
+# ============================================================================
+# PRODUCTION DOCKER COMPOSE
+# ============================================================================
+# Purpose: Production deployment with nginx reverse proxy
+#
+# How to use:
+#   docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+#   docker compose --env-file .env.production -f docker-compose.prod.yml down
+#
+# Features:
+# - Uses smart-chatbot:prod image (gunicorn with 4 workers)
+# - NO volume mounts (code baked into image)
+# - Port 8000 INTERNAL ONLY (only nginx can access)
+# - Nginx reverse proxy exposed on port 80
+# - PostgreSQL with persistent volume (production config)
+# - Internal network (isolated from host)
+# - Health checks for all services
+#
+# Security:
+# - Backend not exposed to internet (nginx only)
+# - Debug mode disabled
+# - No bind mounts (immutable code)
+# - Production postgres credentials (change before deployment!)
+#
+# Access:
+# - Public: http://your-domain.com (via nginx)
+# - Backend: NOT accessible from outside (internal only)
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # PostgreSQL Database (Production)
+  # ==========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: ${POSTGRES_CONTAINER_NAME}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      # CRITICAL: Change password before deploying to production!
+      # Use secrets management or environment variables from hosting platform
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # NO ports exposed - only accessible from internal network
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - backend-network
+
+  # ==========================================================================
+  # Smart Chatbot Application (Production)
+  # ==========================================================================
+  smart-chatbot:
+    image: smart-chatbot:${DOCKER_IMAGE_TAG} # Uses production image (built with --target production)
+    container_name: ${BACKEND_CONTAINER_NAME}
+    expose:
+      - "8000" # INTERNAL ONLY - only nginx can access this port
+    # NO volumes - code is baked into the image (rebuild image for code changes)
+    environment:
+      # Production environment variables
+      # Database URL points to postgres service (internal network)
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DEBUG: "false"
+      LOG_LEVEL: WARNING # Only log warnings and errors in production
+      ENVIRONMENT: production
+      CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD}
+      # Add other production env vars here (API keys, secrets, etc.)
+      # Use hosting platform's secret management (Railway, AWS, etc.)
+    depends_on:
+      postgres:
+        condition: service_healthy # Wait for postgres to be ready
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - backend-network
+
+  # ==========================================================================
+  # Nginx Reverse Proxy (Production)
+  # ==========================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: ${NGINX_CONTAINER_NAME}
+    ports:
+      - "80:80" # HTTP (public access)
+      - "443:443" # HTTPS (if SSL configured)
+    volumes:
+      # Nginx configuration
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      # SSL certificates (if using HTTPS)
+      # - ./nginx/ssl:/etc/nginx/ssl:ro
+      # Static files (if any)
+      # - ./static:/usr/share/nginx/html/static:ro
+    depends_on:
+      smart-chatbot:
+        condition: service_healthy # Wait for backend to be ready
+    restart: always
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://localhost:80/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - backend-network
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  postgres_prod_data:
+    driver: local
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  backend-network:
+    driver: bridge # Internal network - not exposed to host
+
+# ============================================================================
+# USAGE EXAMPLES
+# ============================================================================
+#
+# FIRST TIME SETUP:
+#   1. Build production image:
+#      docker build --target production -t smart-chatbot:prod .
+#
+#   2. Create nginx configuration:
+#      mkdir -p nginx/conf.d
+#      # Create nginx/nginx.conf and nginx/conf.d/default.conf
+#
+#   3. Set production passwords in .env.production:
+#      POSTGRES_PASSWORD=your_secure_password
+#      # Or use hosting platform's secret management (Railway, AWS, etc.)
+#
+#   4. Start services:
+#      docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+#
+# START PRODUCTION ENVIRONMENT:
+#   docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+#
+# STOP PRODUCTION ENVIRONMENT:
+#   docker compose --env-file .env.production -f docker-compose.prod.yml down
+#
+# UPDATE CODE (deploy new version):
+#   1. Rebuild production image:
+#      docker build --target production -t smart-chatbot:prod .
+#
+#   2. Restart services:
+#      docker compose --env-file .env.production -f docker-compose.prod.yml up -d --force-recreate
+#
+# VIEW LOGS:
+#   docker compose --env-file .env.production -f docker-compose.prod.yml logs -f
+#   docker compose --env-file .env.production -f docker-compose.prod.yml logs -f smart-chatbot
+#   docker compose --env-file .env.production -f docker-compose.prod.yml logs -f nginx
+#
+# CHECK SERVICE STATUS:
+#   docker compose --env-file .env.production -f docker-compose.prod.yml ps
+#
+# ACCESS SERVICES:
+#   - Public API: http://your-domain.com (via nginx)
+#   - Backend: NOT accessible from outside (internal network only)
+#   - PostgreSQL: NOT accessible from outside (internal network only)
+#
+# BACKUP DATABASE:
+#   docker compose --env-file .env.production -f docker-compose.prod.yml exec postgres \
+#     pg_dump -U chatbot_user chatbot_prod > backup.sql
+#
+# RESTORE DATABASE:
+#   docker compose --env-file .env.production -f docker-compose.prod.yml exec -T postgres \
+#     psql -U chatbot_user chatbot_prod < backup.sql
+#
+# ============================================================================
+# NGINX CONFIGURATION REQUIRED
+# ============================================================================
+# You need to create nginx configuration files before starting:
+#
+# nginx/nginx.conf (main config):
+#   user nginx;
+#   worker_processes auto;
+#   error_log /var/log/nginx/error.log warn;
+#   pid /var/run/nginx.pid;
+#
+#   events {
+#     worker_connections 1024;
+#   }
+#
+#   http {
+#     include /etc/nginx/mime.types;
+#     default_type application/octet-stream;
+#     include /etc/nginx/conf.d/*.conf;
+#   }
+#
+# nginx/conf.d/default.conf (server config):
+#   upstream backend {
+#     server smart-chatbot:8000;  # Points to internal service
+#   }
+#
+#   server {
+#     listen 80;
+#     server_name your-domain.com;  # Change this!
+#
+#     location / {
+#       proxy_pass http://backend;
+#       proxy_set_header Host $host;
+#       proxy_set_header X-Real-IP $remote_addr;
+#       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#       proxy_set_header X-Forwarded-Proto $scheme;
+#     }
+#
+#     location /health {
+#       proxy_pass http://backend/health;
+#       access_log off;  # Don't log health checks
+#     }
+#   }
+#
+# ============================================================================
+# SECURITY CHECKLIST
+# ============================================================================
+# Before deploying to production:
+#
+# [ ] Change POSTGRES_PASSWORD from default
+# [ ] Use secrets management (Railway secrets, AWS Secrets Manager, etc.)
+# [ ] Configure SSL/HTTPS (Let's Encrypt, Cloudflare, etc.)
+# [ ] Set up firewall rules (only ports 80/443 open)
+# [ ] Review CORS settings in application
+# [ ] Disable debug mode (already set to false)
+# [ ] Set up monitoring and logging
+# [ ] Configure automated backups
+# [ ] Review resource limits (CPU, memory)
+# [ ] Set up health check endpoints in application
+#
+# ============================================================================
