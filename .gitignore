@@ -188,3 +188,26 @@ cython_debug/
 
 # Generated frontend configuration
 frontend/config.js
+
+# Other Files or Directories
+CLAUDE*.md
+GEMINI*.md
+AGENTS*.md
+PROJECT.md
+.claude/
+
+# Everything inside `archive` except `daily_log.md`
+archive/*
+!archive/daily_log.md
+
+# Microservice credentials (sensitive)
+services/credentials/*.json
+!services/credentials/.gitkeep
+
+# Backup files
+*_bk.*
+*_backup.*
+*.bak
+
+# Example/learning files (not production code)
+*_examples.py
