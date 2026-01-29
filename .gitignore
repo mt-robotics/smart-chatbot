@@ -211,3 +211,18 @@ services/credentials/*.json
 
 # Example/learning files (not production code)
 *_examples.py
+
+# Docker-specific environment files
+.env.prod
+.env.dev
+
+# SSL certificates and nginx logs
+nginx/ssl/
+nginx/logs/
+*.pem
+*.key
+*.crt
+
+# Database backups
+*.sql
+!scripts/init-db.sql
