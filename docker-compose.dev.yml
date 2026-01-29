@@ -1,0 +1,197 @@
+# ============================================================================
+# DEVELOPMENT DOCKER COMPOSE
+# ============================================================================
+# Purpose: Local development with hot reload and debugging
+#
+# How to use:
+#   docker compose --env-file .env.development -f docker-compose.dev.yml up
+#   docker compose --env-file .env.development -f docker-compose.dev.yml up --profile tools  (include pgadmin)
+#   docker compose --env-file .env.development -f docker-compose.dev.yml down
+#
+# Features:
+# - Uses smart-chatbot:dev image (uvicorn with --reload)
+# - Bind mount ./app:/app for hot reload (code changes auto-restart)
+# - Uses nginx-proxy with VIRTUAL_HOST (no port conflicts!)
+# - PostgreSQL with persistent volume (internal access only)
+# - pgAdmin available with --profile tools
+# - Connects to external proxy-network for nginx-proxy integration
+#
+# Access (via nginx-proxy):
+# - Frontend: http://frontend-smart-chatbot.local
+# - Backend API: http://smart-chatbot.local
+# - pgAdmin: http://pgadmin-smart-chatbot.local (with --profile tools)
+# - PostgreSQL: Use docker exec or internal connection (no port conflicts)
+#
+# Prerequisites:
+# - nginx-proxy container running (jwilder/nginx-proxy or similar)
+# - /etc/hosts entries:
+#     127.0.0.1 frontend-smart-chatbot.local
+#     127.0.0.1 smart-chatbot.local
+#     127.0.0.1 pgadmin-smart-chatbot.local
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # PostgreSQL Database (Development)
+  # ==========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: ${POSTGRES_CONTAINER_NAME}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST_AUTH_METHOD: trust # Development only - allows passwordless connection
+    # NO port exposure - avoids conflicts with other projects
+    # Access via: docker exec -it chatbot_postgres_dev psql -U chatbot_user -d chatbot_dev
+    # Or connect DBeaver/tools to: localhost:5432 via SSH tunnel to container
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - proxy-network
+
+  # ==========================================================================
+  # pgAdmin (Optional - only with --profile tools)
+  # ==========================================================================
+  pgadmin:
+    image: dpage/pgadmin4:8.12
+    container_name: ${PGADMIN_CONTAINER_NAME}
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      # nginx-proxy configuration
+      VIRTUAL_HOST: ${VIRTUAL_HOST_PGADMIN} # Must match /etc/hosts entry
+      VIRTUAL_PORT: 80 # pgAdmin listens on port 80 inside container
+    expose:
+      - "80" # Internal only - nginx-proxy will route to this
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    profiles: ["tools"] # Start with: docker-compose up --profile tools
+    networks:
+      - proxy-network
+
+  # ==========================================================================
+  # Frontend (Static HTML/JS/CSS)
+  # ==========================================================================
+  frontend:
+    image: nginx:alpine
+    container_name: ${FRONTEND_CONTAINER_NAME}
+    environment:
+      # nginx-proxy configuration
+      VIRTUAL_HOST: ${VIRTUAL_HOST_FRONTEND} # Must match /etc/hosts entry
+      VIRTUAL_PORT: 80 # nginx listens on port 80 inside container
+    expose:
+      - "80" # Internal only - nginx-proxy will route to this
+    volumes:
+      # Mount frontend files (read-only for security)
+      - ./frontend:/usr/share/nginx/html:ro
+    restart: unless-stopped
+    networks:
+      - proxy-network
+
+  # ==========================================================================
+  # Smart Chatbot Application (Development)
+  # ==========================================================================
+  smart-chatbot:
+    image: smart-chatbot:${DOCKER_IMAGE_TAG} # Uses development image (built with --target development)
+    container_name: ${BACKEND_CONTAINER_NAME}
+    expose:
+      - "8000" # Internal only - nginx-proxy will route to this
+    volumes:
+      # Bind mount app directory for hot reload
+      # NOTE: Changed from ./app:/app to ./app:/project/app to match new WORKDIR
+      # Container working directory is now /project (project root)
+      # This maintains absolute import structure: from app.utils.config import ...
+      # Changes to ./app/* on host reflect immediately in /project/app/* in container
+      # uvicorn --reload watches these files and auto-restarts
+      - ./app:/project/app
+    environment:
+      # Override .env settings for Docker environment
+      # Database URL points to postgres service (not localhost)
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+      ENVIRONMENT: development
+      CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD}
+      # nginx-proxy configuration
+      VIRTUAL_HOST: ${VIRTUAL_HOST_BACKEND} # Must match /etc/hosts entry
+      VIRTUAL_PORT: 8000 # Backend listens on port 8000 inside container
+    depends_on:
+      postgres:
+        condition: service_healthy # Wait for postgres to be ready before starting
+    restart: unless-stopped
+    networks:
+      - proxy-network
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  postgres_dev_data:
+    driver: local
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  proxy-network:
+    external: true # Connects to your host nginx proxy network
+    # Create network first: docker network create proxy-network
+    # Your nginx on host machine can then proxy to smart-chatbot:8000
+# ============================================================================
+# USAGE EXAMPLES
+# ============================================================================
+#
+# PREREQUISITES:
+#   1. Ensure nginx-proxy is running (jwilder/nginx-proxy or similar)
+#   2. Create proxy network:
+#      docker network create proxy-network
+#   3. Add to /etc/hosts:
+#      127.0.0.1 frontend-smart-chatbot.local
+#      127.0.0.1 smart-chatbot.local
+#      127.0.0.1 pgadmin-smart-chatbot.local
+#
+# START DEVELOPMENT ENVIRONMENT:
+#   docker compose --env-file .env.development -f docker-compose.dev.yml up
+#
+# START WITH pgAdmin:
+#   docker compose --env-file .env.development -f docker-compose.dev.yml up --profile tools
+#
+# REBUILD AND START (after code changes in Dockerfile):
+#   docker build --target development -t smart-chatbot:dev .
+#   docker compose --env-file .env.development -f docker-compose.dev.yml up
+#
+# STOP ENVIRONMENT:
+#   docker compose --env-file .env.development -f docker-compose.dev.yml down
+#
+# STOP AND REMOVE VOLUMES (fresh database):
+#   docker compose --env-file .env.development -f docker-compose.dev.yml down -v
+#
+# VIEW LOGS:
+#   docker compose --env-file .env.development -f docker-compose.dev.yml logs -f smart-chatbot
+#   docker compose --env-file .env.development -f docker-compose.dev.yml logs -f postgres
+#
+# ACCESS SERVICES (via nginx-proxy):
+#   - Frontend: http://frontend-smart-chatbot.local
+#   - Backend API: http://smart-chatbot.local
+#   - pgAdmin: http://pgadmin-smart-chatbot.local (with --profile tools)
+#
+# ACCESS PostgreSQL (no port conflicts!):
+#   - Via docker exec:
+#     docker exec -it chatbot_postgres_dev psql -U chatbot_user -d chatbot_dev
+#   - Via DBeaver/tools: Create SSH tunnel or use docker network
+#
+# TROUBLESHOOTING:
+#   - If nginx-proxy not routing: Check VIRTUAL_HOST matches /etc/hosts
+#   - If database connection fails: Verify postgres service is healthy
+#   - Check nginx-proxy logs: docker logs <nginx-proxy-container-name>
+#
+# ============================================================================

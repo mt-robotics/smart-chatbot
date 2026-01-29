@@ -424,3 +424,37 @@ None - information extraction working, ready to implement preference storage and
 4. test: add unit tests for config and logging utilities
 
 **Next**: Commit Docker infrastructure on separate branch, then sync all branches
+
+**Docker Infrastructure Implementation** (feature/docker-infrastructure branch)
+
+- Created comprehensive Docker setup for development and production
+  - Multi-stage Dockerfile with separate dev/prod targets
+  - Health checks and proper user permissions
+  - Optimized layer caching for faster builds
+
+- Added environment-specific Docker Compose files
+  - docker-compose.dev.yml: Hot reload, pgAdmin, volume mounts for development
+  - docker-compose.prod.yml: Nginx reverse proxy, optimized for production
+  - Replaced generic docker-compose.yml with environment-specific configs
+
+- Configured nginx as reverse proxy
+  - Optimized settings for production workloads
+  - CORS header configuration
+  - SSL termination support
+  - Load balancing capabilities
+
+- Added development workflow tools
+  - Makefile with commands for container management, database ops, logs
+  - Updated .env.example with Docker-specific variables
+  - Python dependency management (pyproject.toml, uv.lock, .python-version)
+
+**Commits on feature/docker-infrastructure**:
+1. chore: add Docker-specific .gitignore patterns
+2. build: add Python dependency management with uv
+3. feat: add multi-stage Dockerfile for production builds
+4. feat: add environment-specific Docker Compose configurations
+5. feat: add nginx reverse proxy configuration
+6. feat: add Makefile for streamlined development workflow
+7. chore: update .env.example with Docker configuration variables
+
+**Ready to merge**: Both feature branches are now complete and ready for review/merge
