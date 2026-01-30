@@ -7,6 +7,7 @@ different environments (dev/prod). See README.md for configuration options.
 import os
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from dotenv import load_dotenv
 
 
@@ -239,3 +240,66 @@ def get_config(environment: str = None) -> Config:
 def get_logger(name: str = None):
     """Get a logger instance from anywhere in the app"""
     return config_manager.get_logger(name)
+
+
+def find_project_root() -> Path:
+    """Find the project root directory by walking up until we find pyproject.toml
+
+    This works regardless of where the code is executed from:
+    - If running from /app/main.py → walks up to /
+    - If running from /tests/ → walks up to /
+    - If file structure changes → still finds root
+
+    Returns:
+        Path: Absolute path to project root directory
+
+    Raises:
+        FileNotFoundError: If pyproject.toml cannot be found
+    """
+    current = Path(__file__).resolve()  # Start from this file's location
+
+    # Walk up parent directories
+    for parent in [current, *current.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+
+    raise FileNotFoundError("Could not find pyproject.toml in any parent directory")
+
+
+# Cache version to avoid reading file repeatedly
+_cached_version = None
+
+
+def get_version() -> str:
+    """Get application version from pyproject.toml
+
+    Uses caching so the file is only read once during runtime.
+    Can be called from anywhere in the application.
+
+    Returns:
+        str: Version string (e.g., "0.1.0")
+
+    Example:
+        >>> from app.utils.config import get_version
+        >>> version = get_version()
+        >>> print(version)  # "0.1.0"
+    """
+    global _cached_version
+
+    if _cached_version is not None:
+        return _cached_version
+
+    # Find project root and read pyproject.toml
+    try:
+        import tomllib  # Built into Python 3.11+
+    except ImportError:
+        import tomli as tomllib  # Fallback for Python < 3.11
+
+    root = find_project_root()
+    pyproject_path = root / "pyproject.toml"
+
+    with open(pyproject_path, "rb") as f:
+        data = tomllib.load(f)
+        _cached_version = data["project"]["version"]
+
+    return _cached_version

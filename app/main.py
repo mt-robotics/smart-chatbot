@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 # NOTE: Using absolute imports from project root (app.*) instead of relative imports
 # This ensures imports work consistently in both IDE and Docker environments
-from app.utils.config import get_config, get_logger
+from app.utils.config import get_config, get_logger, get_version
 from app.models.nlp_engine import NLPEngine
 from app.models.conversation_manager import ConversationManager
 from app.models.database import init_database, get_database, User, Conversation, Message
@@ -79,7 +79,7 @@ if config.middleware["enable_request_logging"]:
 
 class ChatRequest(BaseModel):
     message: str
-    session_id: str = None
+    session_id: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -88,7 +88,7 @@ class ChatResponse(BaseModel):
     intent: str
     confidence: float
     entities: dict
-    debug_info: dict = None
+    debug_info: dict | None = None
 
 
 @app.get("/")
@@ -112,7 +112,7 @@ async def health_check():
     return {
         "status": "healthy",
         "environment": config.env.name,
-        "version": "2.0.0",  # Updated version with database
+        "version": get_version(),  # Read from pyproject.toml
         "database": db_status,
         "components": {
             "nlp_engine": "ready",
