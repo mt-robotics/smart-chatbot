@@ -458,3 +458,29 @@ None - information extraction working, ready to implement preference storage and
 7. chore: update .env.example with Docker configuration variables
 
 **Ready to merge**: Both feature branches are now complete and ready for review/merge
+
+## 2026-01-30
+
+**Fixed /stats endpoint bug** - SQL query syntax error in get_user_stats()
+
+- Issue: `/analytics/{session_id}/stats` returned 404 "Not Found" despite being registered in FastAPI
+- Confusion: Endpoint showed in SwaggerUI, curl test worked, but Postman failed
+- Root cause: Incorrect SQL query syntax in conversation_manager.py:320-324
+  - Used `.select_from()` in wrong position
+  - Missing `.scalar()` to execute query
+  - Query object couldn't serialize to JSON → exception → empty dict `{}` → 404
+- Fix: Corrected query syntax and added `.scalar()` to get actual count
+- Learning: Path parameters (`/analytics/{id}`) vs query parameters (`/analytics?id=...`)
+
+**Postman learning** - Scripts tab replaces Test tab in v11.82+
+
+- User confused about "Test" tab mentioned in documentation (doesn't exist in v11.82.1)
+- Postman renamed "Test" tab to "Scripts" tab with Pre-request and Post-response sections
+- Post-response section is where you write automation code (e.g., save session_id to environment)
+
+**ML confidence scores** - Low confidence despite verbatim training data match
+
+- User asked why "Track my package" (exact training data match) has confidence 0.34
+- Reason: Only 5-6 training examples per intent (extremely small dataset for ML)
+- Threshold set to 0.3 in .env.development, so 0.34 passes and returns correct intent
+- To improve: Need 50-100+ examples per intent (current approach is basic sklearn classifier)

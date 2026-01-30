@@ -317,10 +317,10 @@ class ConversationManager:
                     return {}
 
                 # Get conversation count
-                conversation_count = db_session.query(
-                    func.count(Conversation.id)  # pylint: disable=not-callable
-                    .select_from(Conversation)
+                conversation_count = (
+                    db_session.query(func.count(Conversation.id))  # pylint: disable=not-callable
                     .filter(Conversation.user_id == user.id)
+                    .scalar()
                 )
 
                 return {
